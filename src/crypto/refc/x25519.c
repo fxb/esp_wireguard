@@ -1,13 +1,10 @@
-#pragma once
-
 #include <string.h>
 #include <psa/crypto.h>
 
-static inline int crypto_scalarmult_curve25519(
+int crypto_scalarmult_curve25519(
     unsigned char *q,
     const unsigned char *n,
     const unsigned char *p) {
-  psa_status_t status;
   psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
   psa_key_id_t key_id = 0;
 
@@ -16,7 +13,7 @@ static inline int crypto_scalarmult_curve25519(
   psa_set_key_type(&attributes, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_MONTGOMERY));
   psa_set_key_bits(&attributes, 255);
 
-  status = psa_import_key(&attributes, n, 32, &key_id);
+  psa_status_t status = psa_import_key(&attributes, n, 32, &key_id);
   if (status != PSA_SUCCESS) {
     return -1;
   }

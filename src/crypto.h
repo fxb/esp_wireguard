@@ -17,8 +17,8 @@ extern "C" {
 #define wireguard_blake2s_final(ctx,out) blake2s_final(ctx,out)
 #define wireguard_blake2s(out,outlen,key,keylen,in,inlen) blake2s(out,outlen,key,keylen,in,inlen)
 
-// X25519 IMPLEMENTATION
-#include <sodium.h>
+// X25519 IMPLEMENTATION (PSA Crypto backend in crypto/refc/x25519.c)
+#include "crypto/refc/x25519.h"
 #define wireguard_x25519(a,b,c) crypto_scalarmult_curve25519(a,b,c)
 
 // CHACHA20POLY1305 IMPLEMENTATION
