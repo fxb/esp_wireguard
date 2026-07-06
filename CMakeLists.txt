@@ -1,0 +1,21 @@
+idf_component_register(
+  SRCS
+    "src/esp_wireguard.c"
+    "src/wireguard.c"
+    "src/wireguardif.c"
+    "src/wireguard-platform.c"
+    "src/crypto.c"
+    "src/crypto/refc/blake2s.c"
+    "src/crypto/refc/chacha20.c"
+    "src/crypto/refc/chacha20poly1305.c"
+    "src/crypto/refc/poly1305-donna.c"
+  INCLUDE_DIRS
+    "include"
+  PRIV_INCLUDE_DIRS
+    "src"
+  REQUIRES
+    lwip
+    esp_netif
+    esp_event
+    mbedtls
+)
