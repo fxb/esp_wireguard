@@ -186,6 +186,16 @@ esp_err_t esp_wireguard_latest_handshake(const wireguard_ctx_t *ctx, time_t *res
 esp_err_t esp_wireguard_add_allowed_ip(const wireguard_ctx_t *ctx, const char *allowed_ip, const char *allowed_ip_mask);
 
 /**
+ * @brief Send a keepalive (empty encrypted packet) to the peer
+ * @param ctx Context of WireGuard
+ * @return
+ *      - ESP_OK on success.
+ *      - ESP_ERR_INVALID_ARG if ctx is NULL
+ *      - ESP_FAIL on failure.
+ */
+esp_err_t esp_wireguard_send_keepalive(const wireguard_ctx_t *ctx);
+
+/**
  * @brief Disconnect from the peer
  *
  * @param ctx Context of WireGuard.

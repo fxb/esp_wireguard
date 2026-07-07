@@ -345,6 +345,15 @@ fail:
     return err;
 }
 
+esp_err_t esp_wireguard_send_keepalive(const wireguard_ctx_t *ctx)
+{
+    if (!ctx || !ctx->netif) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    err_t lwip_err = wireguardif_send_keepalive_to_peer(ctx->netif, wireguard_peer_index);
+    return (lwip_err == ERR_OK) ? ESP_OK : ESP_FAIL;
+}
+
 esp_err_t esp_wireguard_disconnect(wireguard_ctx_t *ctx)
 {
     esp_err_t err;

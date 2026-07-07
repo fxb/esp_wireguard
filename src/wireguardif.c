@@ -642,11 +642,7 @@ static err_t wireguard_start_handshake(struct netif *netif, struct wireguard_pee
 	if (pbuf) {
 		result = wireguardif_peer_output(netif, pbuf, peer);
 		if (result != ERR_OK) {
-#ifdef CONFIG_LWIP_DEBUG
-			ESP_LOGE(TAG, "wireguardif_peer_output: %s", lwip_strerr(result));
-#else
-			ESP_LOGE(TAG, "wireguardif_peer_output: %i", result);
-#endif
+			ESP_LOGD(TAG, "wireguardif_peer_output: %i", result);
 		}
 		pbuf_free(pbuf);
 		peer->send_handshake = false;
@@ -764,6 +760,15 @@ err_t wireguardif_add_allowed_ip(struct netif *netif, u8_t peer_index, ip_addr_t
 		} else {
 			result = ERR_MEM;
 		}
+	}
+	return result;
+}
+
+err_t wireguardif_send_keepalive_to_peer(struct netif *netif, u8_t peer_index) {
+	struct wireguard_peer *peer;
+	err_t result = wireguardif_lookup_peer(netif, peer_index, &peer);
+	if (result == ERR_OK) {
+		wireguardif_send_keepalive((struct wireguard_device *)netif->state, peer);
 	}
 	return result;
 }
