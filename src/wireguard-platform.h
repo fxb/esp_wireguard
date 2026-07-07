@@ -54,7 +54,7 @@ extern "C" {
 #ifdef CONFIG_WIREGUARD_MAX_SRC_IPS
 	#define WIREGUARD_MAX_SRC_IPS (CONFIG_WIREGUARD_MAX_SRC_IPS)
 #else
-	#define WIREGUARD_MAX_SRC_IPS (1)
+	#define WIREGUARD_MAX_SRC_IPS (2)
 #endif
 
 // Per device limit on accepting (valid) initiation requests - per peer
