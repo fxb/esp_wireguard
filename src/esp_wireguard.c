@@ -64,6 +64,8 @@ static struct netif *wg_netif = NULL;
 static struct wireguardif_peer peer = {0};
 static uint8_t wireguard_peer_index = WIREGUARDIF_INVALID_INDEX;
 static uint8_t preshared_key_decoded[WG_KEY_LEN];
+static void (*handshake_cb)(void *arg) = NULL;
+static void *handshake_cb_arg = NULL;
 
 static void esp_wireguard_dns_query_callback(const char *hostname, const ip_addr_t *ipaddr, wireguard_config_t *config) {
     if(ipaddr) {
@@ -246,6 +248,7 @@ esp_err_t esp_wireguard_connect(wireguard_ctx_t *ctx)
         }
         ctx->netif = wg_netif;
         ctx->netif_default = netif_default;
+        wireguardif_set_handshake_complete_cb(ctx->netif, handshake_cb, handshake_cb_arg);
     }
 
     /* start another async hostname resolution in case the first was executed too early */
@@ -343,6 +346,19 @@ esp_err_t esp_wireguard_restore_default(const wireguard_ctx_t *ctx)
     err = ESP_OK;
 fail:
     return err;
+}
+
+esp_err_t esp_wireguard_set_handshake_cb(const wireguard_ctx_t *ctx, void (*callback)(void *arg), void *arg)
+{
+    if (!ctx) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    handshake_cb = callback;
+    handshake_cb_arg = arg;
+    if (ctx->netif) {
+        wireguardif_set_handshake_complete_cb(ctx->netif, callback, arg);
+    }
+    return ESP_OK;
 }
 
 esp_err_t esp_wireguard_send_keepalive(const wireguard_ctx_t *ctx)

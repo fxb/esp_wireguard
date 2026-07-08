@@ -88,6 +88,12 @@ static void wireguardif_send_pending_initiations(void *ctx) {
 	}
 }
 
+static void wireguardif_notify_handshake_complete(struct wireguard_device *device) {
+	if (device->handshake_complete_cb) {
+		device->handshake_complete_cb(device->handshake_complete_arg);
+	}
+}
+
 static void update_peer_addr(struct wireguard_peer *peer, const ip_addr_t *addr, u16_t port) {
 	peer->ip = *addr;
 	peer->port = port;
@@ -267,6 +273,8 @@ static void wireguardif_process_response_message(struct wireguard_device *device
 
 		// Set the IF-UP flag on netif
 		netif_set_link_up(device->netif);
+
+		wireguardif_notify_handshake_complete(device);
 	} else {
 		// Packet bad
 	}
@@ -456,6 +464,8 @@ static void wireguardif_send_handshake_response(struct wireguard_device *device,
 	if (wireguard_create_handshake_response(device, peer, &packet)) {
 
 		wireguard_start_session(peer, false);
+
+		wireguardif_notify_handshake_complete(device);
 
 		ESP_LOGD(TAG, "sending handshake response packet");
 		pbuf = pbuf_alloc(PBUF_TRANSPORT, sizeof(struct message_handshake_response), PBUF_RAM);
@@ -798,6 +808,15 @@ err_t wireguardif_add_allowed_ip(struct netif *netif, u8_t peer_index, ip_addr_t
 		}
 	}
 	return result;
+}
+
+void wireguardif_set_handshake_complete_cb(struct netif *netif, void (*callback)(void *arg), void *arg) {
+	LWIP_ASSERT("netif != NULL", (netif != NULL));
+	struct wireguard_device *device = (struct wireguard_device *)netif->state;
+	if (device) {
+		device->handshake_complete_cb = callback;
+		device->handshake_complete_arg = arg;
+	}
 }
 
 err_t wireguardif_send_keepalive_to_peer(struct netif *netif, u8_t peer_index) {

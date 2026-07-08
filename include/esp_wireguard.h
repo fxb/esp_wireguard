@@ -198,6 +198,23 @@ esp_err_t esp_wireguard_add_allowed_ip(const wireguard_ctx_t *ctx, const char *a
 esp_err_t esp_wireguard_send_keepalive(const wireguard_ctx_t *ctx);
 
 /**
+ * @brief Register a callback fired whenever a handshake completes and a new
+ *        session starts, both as initiator and as responder.
+ *
+ * May be called before or after `esp_wireguard_connect()`. The callback runs
+ * in the lwIP tcpip thread and must not block; typically it should just
+ * signal a semaphore or queue. Pass NULL to unregister.
+ *
+ * @param ctx Context of WireGuard
+ * @param callback Function called on handshake completion
+ * @param arg Opaque argument passed to the callback
+ * @return
+ *      - ESP_OK on success.
+ *      - ESP_ERR_INVALID_ARG if ctx is NULL
+ */
+esp_err_t esp_wireguard_set_handshake_cb(const wireguard_ctx_t *ctx, void (*callback)(void *arg), void *arg);
+
+/**
  * @brief Disconnect from the peer
  *
  * @param ctx Context of WireGuard.

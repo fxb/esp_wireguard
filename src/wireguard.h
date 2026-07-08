@@ -194,6 +194,11 @@ struct wireguard_device {
 	// List of peers associated with this device
  	struct wireguard_peer peers[WIREGUARD_MAX_PEERS];
 
+	// Optional: called (in the lwIP tcpip thread) whenever a handshake
+	// completes and a new session starts
+	void (*handshake_complete_cb)(void *arg);
+	void *handshake_complete_arg;
+
 	bool valid;
 };
 

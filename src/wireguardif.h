@@ -149,6 +149,11 @@ err_t wireguardif_add_allowed_ip(struct netif *netif, u8_t peer_index, ip_addr_t
 // Send a keepalive (empty encrypted packet) to the given peer
 err_t wireguardif_send_keepalive_to_peer(struct netif *netif, u8_t peer_index);
 
+// Register a callback fired whenever a handshake completes and a new session
+// starts, both as initiator and as responder. Runs in the lwIP tcpip thread,
+// so it must not block. Pass NULL to unregister.
+void wireguardif_set_handshake_complete_cb(struct netif *netif, void (*callback)(void *arg), void *arg);
+
 #ifdef __cplusplus
 }
 #endif
