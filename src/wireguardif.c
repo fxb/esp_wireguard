@@ -44,6 +44,7 @@
 #include "lwip/udp.h"
 #include "lwip/mem.h"
 #include "lwip/sys.h"
+#include "lwip/tcpip.h"
 #include "lwip/timeouts.h"
 
 #include "esp_wireguard_log.h"
@@ -60,6 +61,32 @@
 #define WIREGUARDIF_TIMER_MSECS 400
 
 #define TAG "wireguardif"
+
+static bool should_send_initiation(struct wireguard_peer *peer);
+static err_t wireguard_start_handshake(struct netif *netif, struct wireguard_peer *peer);
+
+// Send a handshake initiation right away if one is due, rather than waiting
+// for the next periodic timer tick. Must run in the lwIP tcpip thread.
+static void wireguardif_maybe_send_initiation(struct netif *netif, struct wireguard_peer *peer) {
+	if (should_send_initiation(peer)) {
+		wireguard_start_handshake(netif, peer);
+	}
+}
+
+static void wireguardif_send_pending_initiations(void *ctx) {
+	struct netif *netif = (struct netif *)ctx;
+	struct wireguard_device *device = (struct wireguard_device *)netif->state;
+	int x;
+	if (!device) {
+		return;
+	}
+	for (x = 0; x < WIREGUARD_MAX_PEERS; x++) {
+		struct wireguard_peer *peer = &device->peers[x];
+		if (peer->valid) {
+			wireguardif_maybe_send_initiation(netif, peer);
+		}
+	}
+}
 
 static void update_peer_addr(struct wireguard_peer *peer, const ip_addr_t *addr, u16_t port) {
 	peer->ip = *addr;
@@ -178,6 +205,9 @@ static err_t wireguardif_output_to_peer(struct netif *netif, struct pbuf *q, con
 					peer->send_handshake = true;
 				} else if (keypair->initiator && wireguard_expired(keypair->keypair_millis, REKEY_AFTER_TIME)) {
 					peer->send_handshake = true;
+				}
+				if (peer->send_handshake) {
+					wireguardif_maybe_send_initiation(netif, peer);
 				}
 
 			} else {
@@ -319,6 +349,7 @@ static void wireguardif_process_data_message(struct wireguard_device *device, st
 					// Check to see if we should rekey
 					if (keypair->initiator && wireguard_expired(keypair->keypair_millis, REJECT_AFTER_TIME - peer->keepalive_interval - REKEY_TIMEOUT)) {
 						peer->send_handshake = true;
+						wireguardif_maybe_send_initiation(device->netif, peer);
 					}
 
 					// Make sure that link is reported as up
@@ -686,6 +717,11 @@ err_t wireguardif_connect(struct netif *netif, u8_t peer_index) {
 			peer->active = true;
 			peer->ip = peer->connect_ip;
 			peer->port = peer->connect_port;
+			// Send the first initiation immediately instead of waiting up to
+			// WIREGUARDIF_TIMER_MSECS for the next timer tick. Connect may be
+			// called from any task, so marshal onto the tcpip thread; if the
+			// callback cannot be queued the timer picks it up as before.
+			tcpip_callback(wireguardif_send_pending_initiations, netif);
 			result = ERR_OK;
 		} else {
 			result = ERR_ARG;
