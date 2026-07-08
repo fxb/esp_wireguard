@@ -810,6 +810,19 @@ err_t wireguardif_add_allowed_ip(struct netif *netif, u8_t peer_index, ip_addr_t
 	return result;
 }
 
+err_t wireguardif_request_handshake(struct netif *netif, u8_t peer_index) {
+	struct wireguard_peer *peer;
+	err_t result = wireguardif_lookup_peer(netif, peer_index, &peer);
+	if (result == ERR_OK) {
+		peer->send_handshake = true;
+		// Send from the tcpip thread right away; if the callback cannot be
+		// queued the periodic timer picks it up. The REKEY_TIMEOUT gate in
+		// wireguardif_can_send_initiation prevents duplicate initiations.
+		tcpip_callback(wireguardif_send_pending_initiations, netif);
+	}
+	return result;
+}
+
 void wireguardif_set_handshake_complete_cb(struct netif *netif, void (*callback)(void *arg), void *arg) {
 	LWIP_ASSERT("netif != NULL", (netif != NULL));
 	struct wireguard_device *device = (struct wireguard_device *)netif->state;

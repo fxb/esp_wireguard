@@ -154,6 +154,11 @@ err_t wireguardif_send_keepalive_to_peer(struct netif *netif, u8_t peer_index);
 // so it must not block. Pass NULL to unregister.
 void wireguardif_set_handshake_complete_cb(struct netif *netif, void (*callback)(void *arg), void *arg);
 
+// Flag that the given peer should handshake and send the initiation
+// immediately (subject to the REKEY_TIMEOUT retransmit gate). Safe to call
+// from any task.
+err_t wireguardif_request_handshake(struct netif *netif, u8_t peer_index);
+
 #ifdef __cplusplus
 }
 #endif

@@ -33,6 +33,7 @@
 #include "esp_wireguard.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
@@ -42,6 +43,7 @@
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
 #include "lwip/err.h"
+#include "lwip/sys.h"
 #include "esp_wireguard_err.h"
 #include "esp_wireguard_log.h"
 #include "mbedtls/base64.h"
@@ -64,8 +66,14 @@ static struct netif *wg_netif = NULL;
 static struct wireguardif_peer peer = {0};
 static uint8_t wireguard_peer_index = WIREGUARDIF_INVALID_INDEX;
 static uint8_t preshared_key_decoded[WG_KEY_LEN];
-static void (*handshake_cb)(void *arg) = NULL;
-static void *handshake_cb_arg = NULL;
+static sys_sem_t handshake_sem;
+
+static void esp_wireguard_handshake_complete(void *arg) {
+    (void) arg;
+    if (sys_sem_valid(&handshake_sem)) {
+        sys_sem_signal(&handshake_sem);
+    }
+}
 
 static void esp_wireguard_dns_query_callback(const char *hostname, const ip_addr_t *ipaddr, wireguard_config_t *config) {
     if(ipaddr) {
@@ -217,6 +225,13 @@ esp_err_t esp_wireguard_init(wireguard_config_t *config, wireguard_ctx_t *ctx)
 #endif // !defined(LIBRETINY)
         goto fail;
     }
+
+    if (!sys_sem_valid(&handshake_sem) && sys_sem_new(&handshake_sem, 0) != ERR_OK) {
+        ESP_LOGE(TAG, "init: sys_sem_new failed");
+        err = ESP_FAIL;
+        goto fail;
+    }
+
     ctx->config = config;
     ctx->netif = NULL;
     ctx->netif_default = netif_default;
@@ -248,7 +263,7 @@ esp_err_t esp_wireguard_connect(wireguard_ctx_t *ctx)
         }
         ctx->netif = wg_netif;
         ctx->netif_default = netif_default;
-        wireguardif_set_handshake_complete_cb(ctx->netif, handshake_cb, handshake_cb_arg);
+        wireguardif_set_handshake_complete_cb(ctx->netif, esp_wireguard_handshake_complete, NULL);
     }
 
     /* start another async hostname resolution in case the first was executed too early */
@@ -348,18 +363,6 @@ fail:
     return err;
 }
 
-esp_err_t esp_wireguard_set_handshake_cb(const wireguard_ctx_t *ctx, void (*callback)(void *arg), void *arg)
-{
-    if (!ctx) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    handshake_cb = callback;
-    handshake_cb_arg = arg;
-    if (ctx->netif) {
-        wireguardif_set_handshake_complete_cb(ctx->netif, callback, arg);
-    }
-    return ESP_OK;
-}
 
 esp_err_t esp_wireguard_send_keepalive(const wireguard_ctx_t *ctx)
 {
@@ -450,6 +453,46 @@ esp_err_t esp_wireguard_latest_handshake(const wireguard_ctx_t *ctx, time_t *res
 
 fail:
     return err;
+}
+
+static bool esp_wireguard_handshake_is_fresh(const wireguard_ctx_t *ctx)
+{
+    if (esp_wireguard_peer_is_up(ctx) != ESP_OK) {
+        return false;
+    }
+    time_t latest = wireguardif_latest_handshake(ctx->netif, wireguard_peer_index);
+    if (latest == 0) {
+        return false;
+    }
+    return difftime(time(NULL), latest) < ESP_WIREGUARD_REKEY_AFTER_TIME;
+}
+
+esp_err_t esp_wireguard_ensure_handshake(const wireguard_ctx_t *ctx, uint32_t timeout_ms)
+{
+    if (!ctx || !ctx->netif) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (esp_wireguard_handshake_is_fresh(ctx)) {
+        return ESP_OK;
+    }
+
+    wireguardif_request_handshake(ctx->netif, wireguard_peer_index);
+
+    uint32_t start = sys_now();
+    for (;;) {
+        if (esp_wireguard_handshake_is_fresh(ctx)) {
+            return ESP_OK;
+        }
+        uint32_t elapsed = sys_now() - start;
+        if (elapsed >= timeout_ms) {
+            return ESP_ERR_TIMEOUT;
+        }
+        // Freshness above is authoritative, so a stale signal from an earlier
+        // handshake just costs one extra loop iteration. Note a timeout of 0
+        // would mean wait-forever; elapsed < timeout_ms keeps it >= 1.
+        sys_arch_sem_wait(&handshake_sem, timeout_ms - elapsed);
+    }
 }
 
 esp_err_t esp_wireguard_add_allowed_ip(const wireguard_ctx_t *ctx, const char *allowed_ip, const char *allowed_ip_mask)

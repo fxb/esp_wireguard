@@ -198,21 +198,26 @@ esp_err_t esp_wireguard_add_allowed_ip(const wireguard_ctx_t *ctx, const char *a
 esp_err_t esp_wireguard_send_keepalive(const wireguard_ctx_t *ctx);
 
 /**
- * @brief Register a callback fired whenever a handshake completes and a new
- *        session starts, both as initiator and as responder.
+ * @brief Ensure the session has a sufficiently recent handshake, waiting for
+ *        one to complete if necessary.
  *
- * May be called before or after `esp_wireguard_connect()`. The callback runs
- * in the lwIP tcpip thread and must not block; typically it should just
- * signal a semaphore or queue. Pass NULL to unregister.
+ * Returns immediately if the peer is up and the latest handshake is younger
+ * than `ESP_WIREGUARD_REKEY_AFTER_TIME`. Otherwise requests a handshake (the
+ * initiation is sent immediately, subject to the protocol retransmit gate)
+ * and blocks the calling task until it completes or the timeout expires.
+ * A timeout of 0 just performs the freshness check.
+ *
+ * Intended for a single waiter. Must not be called from the lwIP tcpip
+ * thread. Only call after `esp_wireguard_connect()`.
  *
  * @param ctx Context of WireGuard
- * @param callback Function called on handshake completion
- * @param arg Opaque argument passed to the callback
+ * @param timeout_ms Maximum time to wait for a handshake to complete
  * @return
- *      - ESP_OK on success.
- *      - ESP_ERR_INVALID_ARG if ctx is NULL
+ *      - ESP_OK if the handshake is fresh or completed while waiting.
+ *      - ESP_ERR_TIMEOUT if no handshake completed within timeout_ms
+ *      - ESP_ERR_INVALID_ARG if ctx is NULL or not connected
  */
-esp_err_t esp_wireguard_set_handshake_cb(const wireguard_ctx_t *ctx, void (*callback)(void *arg), void *arg);
+esp_err_t esp_wireguard_ensure_handshake(const wireguard_ctx_t *ctx, uint32_t timeout_ms);
 
 /**
  * @brief Disconnect from the peer
